@@ -1,5 +1,5 @@
 // Nano Page Saver - Main Popup Script (Modular Version)
-// Version 3.3.0 - Individual progress bars for each video, video titles and thumbnails
+// Version 3.3.1 - Fixed Vimeo deduplication, always show video titles and subtitles
 
 // ===== IMPORTS =====
 import { sanitizeFilename, showStatus, showProgress, hideProgress, formatSize, formatSpeed } from './modules/utils.js';
@@ -300,12 +300,22 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     // Deduplicate and prioritize
     const uniqueVideos = [];
     const seenUrls = new Set();
+    const seenVimeoIds = new Set(); // Special dedup for Vimeo by videoId
     
     // Priority order: HLS/DASH manifests > HTML5 Video > Direct files > Others
     const priorityOrder = ['hls', 'dash', 'HTML5 Video', 'Vimeo Player', 'direct', 'youtube', 'manifest'];
     
     for (const priority of priorityOrder) {
       for (const video of allVideos) {
+        // Special handling for Vimeo - deduplicate by videoId
+        if (video.type === 'Vimeo Player' && video.videoId) {
+          if (seenVimeoIds.has(video.videoId)) {
+            console.log(`Skipping duplicate Vimeo: ${video.videoId}`);
+            continue;
+          }
+          seenVimeoIds.add(video.videoId);
+        }
+        
         const videoKey = video.url || video.iframeUrl || video.sources?.[0] || '';
         
         if (seenUrls.has(videoKey)) continue;
@@ -325,6 +335,12 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     
     // Add any remaining videos not in priority list
     for (const video of allVideos) {
+      // Skip Vimeo duplicates
+      if (video.type === 'Vimeo Player' && video.videoId) {
+        if (seenVimeoIds.has(video.videoId)) continue;
+        seenVimeoIds.add(video.videoId);
+      }
+      
       const videoKey = video.url || video.iframeUrl || video.sources?.[0] || '';
       if (!seenUrls.has(videoKey)) {
         uniqueVideos.push(video);

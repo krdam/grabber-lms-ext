@@ -5,9 +5,46 @@
 export function detectVideos() {
   const videos = [];
   
-  // PRIORITY 1: Find <video> elements (these are recordable!)
+  // First, temporarily show all hidden content to detect videos
+  const hiddenElements = [];
+  
+  // Expand all modals/popups
+  document.querySelectorAll('.modal, .popup, [role="dialog"], [aria-modal="true"]').forEach(elem => {
+    if (elem.style.display === 'none' || elem.getAttribute('aria-hidden') === 'true') {
+      hiddenElements.push({
+        element: elem,
+        originalDisplay: elem.style.display,
+        originalVisibility: elem.style.visibility,
+        originalAriaHidden: elem.getAttribute('aria-hidden')
+      });
+      elem.style.display = 'block';
+      elem.style.visibility = 'visible';
+      elem.setAttribute('aria-hidden', 'false');
+    }
+  });
+  
+  // Also expand collapsed elements
+  document.querySelectorAll('.collapse, [aria-hidden="true"]').forEach(elem => {
+    if (elem.matches('video') || elem.querySelector('video')) {
+      hiddenElements.push({
+        element: elem,
+        originalDisplay: elem.style.display,
+        originalVisibility: elem.style.visibility,
+        originalAriaHidden: elem.getAttribute('aria-hidden')
+      });
+      elem.style.display = 'block';
+      elem.style.visibility = 'visible';
+      elem.removeAttribute('aria-hidden');
+    }
+  });
+  
+  if (hiddenElements.length > 0) {
+    console.log(`Temporarily expanded ${hiddenElements.length} hidden elements to detect videos`);
+  }
+  
+  // PRIORITY 1: Find <video> elements (now including those that were hidden!)
   const videoElements = document.querySelectorAll('video');
-  console.log('Found', videoElements.length, 'video elements');
+  console.log('Found', videoElements.length, 'video elements (including from hidden modals/popups)');
   
   videoElements.forEach((video, index) => {
     const sources = [];
@@ -26,19 +63,44 @@ export function detectVideos() {
     
     // Generate thumbnail from video
     let thumbnail = null;
+    let posterImage = video.poster || '';
+    
     try {
-      if (video.videoWidth > 0 && video.videoHeight > 0 && video.readyState >= 2) {
-        const canvas = document.createElement('canvas');
-        const aspectRatio = video.videoWidth / video.videoHeight;
-        canvas.width = 120; // Thumbnail width
-        canvas.height = Math.round(120 / aspectRatio);
+      // Try to generate thumbnail from video frame
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        // If video not ready, try to load it briefly
+        if (video.readyState < 2) {
+          // Try to load metadata
+          video.load();
+          // Note: this might not work immediately, so we'll also try poster
+        }
         
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        thumbnail = canvas.toDataURL('image/jpeg', 0.6);
+        if (video.readyState >= 2) {
+          const canvas = document.createElement('canvas');
+          const aspectRatio = video.videoWidth / video.videoHeight;
+          canvas.width = 120; // Thumbnail width
+          canvas.height = Math.round(120 / aspectRatio);
+          
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          thumbnail = canvas.toDataURL('image/jpeg', 0.6);
+          console.log(`✓ Generated thumbnail for video ${index + 1}`);
+        } else if (posterImage) {
+          // Use poster as thumbnail
+          thumbnail = posterImage;
+          console.log(`✓ Using poster as thumbnail for video ${index + 1}`);
+        }
+      } else if (posterImage) {
+        // No video dimensions, use poster
+        thumbnail = posterImage;
+        console.log(`✓ Using poster for video ${index + 1}`);
       }
     } catch (error) {
-      // Ignore thumbnail generation errors
+      console.log(`Could not generate thumbnail for video ${index + 1}:`, error);
+      // Try poster as fallback
+      if (posterImage) {
+        thumbnail = posterImage;
+      }
     }
     
     // Generate video title from page title or video attributes
@@ -54,8 +116,8 @@ export function detectVideos() {
       title: videoTitle,
       sources: sources.length > 0 ? sources : ['blob or streaming'],
       duration: video.duration || 0,
-      poster: video.poster || '',
-      thumbnail: thumbnail,
+      poster: posterImage,
+      thumbnail: thumbnail || posterImage, // Use poster if no thumbnail generated
       hasVideoElement: true,
       index: index
     });
@@ -63,20 +125,43 @@ export function detectVideos() {
     console.log(`Video ${index + 1}:`, video.duration ? `${Math.round(video.duration)}s` : 'unknown duration', sources.length > 0 ? sources[0] : 'blob/streaming');
   });
   
-  // PRIORITY 2: Find Vimeo/YouTube iframes
+  // PRIORITY 2: Find Vimeo/YouTube iframes (with deduplication)
+  const vimeoIds = new Set();
+  
   document.querySelectorAll('iframe[src*="vimeo.com"], [data-media*="vimeo"]').forEach(elem => {
     const src = elem.src || elem.getAttribute('data-media') || '';
     const videoIdMatch = src.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    
     if (videoIdMatch) {
+      const videoId = videoIdMatch[1];
+      
+      // Skip duplicates
+      if (vimeoIds.has(videoId)) {
+        console.log(`Skipping duplicate Vimeo video ID: ${videoId}`);
+        return;
+      }
+      
+      vimeoIds.add(videoId);
+      
+      // Extract title from iframe or parent
+      const pageTitle = document.title;
+      const iframeTitle = elem.getAttribute('title') || 
+                         elem.getAttribute('aria-label') ||
+                         elem.closest('[data-title]')?.getAttribute('data-title') ||
+                         pageTitle;
+      
       videos.push({
         type: 'Vimeo Player',
-        videoId: videoIdMatch[1],
-        iframeUrl: src.includes('player.vimeo.com') ? src : `https://player.vimeo.com/video/${videoIdMatch[1]}`,
-        vimeoUrl: `https://vimeo.com/${videoIdMatch[1]}`,
+        title: iframeTitle || `Vimeo Video ${videoId}`,
+        videoId: videoId,
+        iframeUrl: src.includes('player.vimeo.com') ? src : `https://player.vimeo.com/video/${videoId}`,
+        vimeoUrl: `https://vimeo.com/${videoId}`,
         embedUrl: src,
         hasIframe: true,
         canRecordFromIframe: true
       });
+      
+      console.log(`Found Vimeo video ID ${videoId}: "${iframeTitle}"`);
     }
   });
   
@@ -96,6 +181,20 @@ export function detectVideos() {
   });
   
   console.log('Total videos detected:', videos.length);
+  
+  // Restore original state of hidden elements
+  hiddenElements.forEach(({ element, originalDisplay, originalVisibility, originalAriaHidden }) => {
+    element.style.display = originalDisplay;
+    element.style.visibility = originalVisibility;
+    if (originalAriaHidden) {
+      element.setAttribute('aria-hidden', originalAriaHidden);
+    }
+  });
+  
+  if (hiddenElements.length > 0) {
+    console.log(`Restored ${hiddenElements.length} hidden elements to original state`);
+  }
+  
   return videos;
 }
 
@@ -186,14 +285,16 @@ export function displayVideos(videos, tabId) {
       `;
     }
     
-    // Generate video title
+    // Generate video title (always show)
     const videoTitle = video.title || `Video ${index + 1}`;
-    const videoSubtitle = video.format ? `${video.format}${video.quality && video.quality !== 'Unknown' ? ` - ${video.quality}` : ''}` : '';
+    const videoSubtitle = video.format ? 
+      `${video.format}${video.quality && video.quality !== 'Unknown' ? ` - ${video.quality}` : ''}` : 
+      video.type;
     
     videoItem.innerHTML = `
       <div class="video-item-header-title">
         <div class="video-title">${videoTitle}</div>
-        ${videoSubtitle ? `<div class="video-subtitle">${videoSubtitle}</div>` : ''}
+        <div class="video-subtitle">${videoSubtitle}</div>
       </div>
       <div class="video-item-content">
         ${thumbnailHtml}
