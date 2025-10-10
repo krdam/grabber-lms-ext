@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nano Page Saver</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg class="logo" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="24" height="24" rx="4" fill="currentColor" opacity="0.2"/>
+        <path d="M12 10H20M12 16H20M12 22H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h1>Nano Page Saver</h1>
+    </div>
+
+    <div class="info">
+      <div class="info-item">
+        <span class="label">Current page:</span>
+        <span class="value" id="pageTitle">Loading...</span>
+      </div>
+      <div class="info-item">
+        <span class="label">URL:</span>
+        <span class="value url" id="pageUrl">Loading...</span>
+      </div>
+    </div>
+
+    <div class="format-selector">
+      <h3>Save Format</h3>
+      <div class="format-buttons">
+        <button class="format-btn active" data-format="html">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 4L6 16L10 17L14 16L16 4H4Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <path d="M7 8H13M7 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          HTML
+        </button>
+        <button class="format-btn" data-format="pdf">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 2H12L16 6V18H6V2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <path d="M12 2V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="8" y="14" font-size="6" fill="currentColor" text-anchor="middle" font-weight="bold">PDF</text>
+          </svg>
+          PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="options" id="htmlOptions">
+      <h3>HTML Options</h3>
+      <label class="checkbox-label">
+        <input type="checkbox" id="includeImages" checked>
+        <span>Include images (inline as base64)</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="includeStyles" checked>
+        <span>Include CSS styles</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="includeScripts">
+        <span>Keep JavaScript (enables interactivity)</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="minifyHtml">
+        <span>Minify HTML</span>
+      </label>
+    </div>
+
+    <div class="options hidden" id="pdfOptions">
+      <h3>PDF Options</h3>
+      <label class="checkbox-label">
+        <input type="checkbox" id="extractHidden" checked>
+        <span>Extract hidden content (popups, tooltips)</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="removeControls" checked>
+        <span>Remove interactive controls (buttons, inputs)</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="preserveColors">
+        <span>Preserve original text and background colors</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="includeVideos">
+        <span>Include video elements (as placeholders)</span>
+      </label>
+    </div>
+
+    <div id="permissionWarning" class="permission-warning hidden">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <span class="warning-text">Extension needs permission to access web pages. After granting, the page will reload.</span>
+      </div>
+      <button id="grantPermissionBtn" class="grant-permission-btn">
+        Grant Permission & Reload
+      </button>
+    </div>
+
+    <div id="progressContainer" class="progress-container hidden">
+      <div class="progress-label" id="progressLabel">Preparing...</div>
+      <div class="progress-bar">
+        <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <button id="saveBtn" class="save-btn">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 3V13M10 13L6 9M10 13L14 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M3 17H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Save as HTML
+    </button>
+
+    <div id="status" class="status"></div>
+
+    <div id="downloadsSection" class="downloads-section hidden">
+      <h3>📥 Active Downloads</h3>
+      <div id="downloadTasks" class="download-tasks"></div>
+    </div>
+
+    <div id="videoSection" class="video-section hidden">
+      <!-- Native Host Status (for HLS with separate audio) -->
+      <div id="nativeHostStatus" class="native-host-status">
+        <span class="status-icon">⏳</span>
+        <span class="status-text">Checking FFmpeg...</span>
+      </div>
+      
+      <h3>🎥 Videos Found on Page</h3>
+      <div id="videoList" class="video-list"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-value" id="savedCount">0</span>
+        <span class="stat-label">Pages Saved</span>
+      </div>
+    </div>
+  </div>
+
+    <!-- Mux.js library for MP4 muxing -->
+    <script src="modules/mux.min.js"></script>
+    
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
+
