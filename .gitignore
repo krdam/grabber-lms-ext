@@ -1,0 +1,42 @@
+# Examples / Test files
+example/
+examples/
+
+# Node modules (if added in future)
+node_modules/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build artifacts (if any)
+dist/
+build/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Private/local config
+.env
+.env.local
+config.local.json
+

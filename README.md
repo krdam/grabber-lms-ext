@@ -1,6 +1,8 @@
 # 📄 Nano Page Saver
 
-A powerful Chrome extension for saving web pages as HTML or PDF, with advanced video downloader featuring HLS segment merging - similar to Video DownloadHelper but built-in!
+A powerful Chrome extension for saving web pages as HTML or PDF, with advanced video downloader featuring automatic HLS merging via FFmpeg Native Host - comparable to Video DownloadHelper!
+
+**Current Version: 3.3.8**
 
 ## ✨ Features
 
@@ -11,6 +13,7 @@ A powerful Chrome extension for saving web pages as HTML or PDF, with advanced v
 ### 🎯 HTML Save Options
 - Include images (converted to base64 inline)
 - Include CSS styles for visual preservation
+- Keep JavaScript for interactive elements
 - Minify HTML for smaller file sizes
 
 ### 📑 PDF Intelligence
@@ -19,319 +22,410 @@ A powerful Chrome extension for saving web pages as HTML or PDF, with advanced v
   - Tooltips and hover text
   - Dropdown menus
   - Collapsed/expandable sections
+  - Accordion panels (including from modals)
 - **Remove Clutter**: Strips away interactive elements:
   - Buttons and form controls
   - Navigation menus
-  - Ads and social media widgets
+  - Video elements (optional)
 - **Structure Content**: Maintains original document structure with images in correct positions
-- **Clean Format**: All text converted to black for optimal readability
+- **Smart Formatting**: Optimal font sizes and clean layout
+- **Color Options**: Choose between clean black text or preserve original colors
 
 ### 🎥 Advanced Video Detection & Download
+
+#### Automatic Detection
+- **HTML5 Video**: Detects `<video>` elements with thumbnails and duration
+- **Vimeo**: Auto-extracts HLS streams from iframes (~5 seconds)
+- **YouTube**: Attempts auto-extraction from iframes (~3 seconds)
 - **Network Monitoring**: Captures video URLs from network requests
-- **Multiple Formats**: Direct files (MP4, WebM), Adaptive streams (HLS, DASH), YouTube, Vimeo
-- **HLS Intelligent Processing**: Automatically downloads segments OR records playback based on audio configuration
-- **Separate Audio Handling**: Detects separate audio tracks and uses browser's native HLS player + MediaRecorder
-- **Direct Download**: One-click download for direct video files with progress tracking
-- **Quality Detection**: Automatically detects and selects highest quality (720p, 1080p, 4K, etc.)
-- **Manifest Parsing**: Handles master and variant HLS playlists with audio track detection
-- **Real-time Progress**: Live download progress with segment counter and recording status
-- **MediaRecorder Integration**: Browser-native recording ensures perfect audio+video sync
-- **Parallel Downloads**: Download multiple videos simultaneously with individual progress bars
-- **Smart Categorization**: Distinguishes between direct files, HLS streams, and other formats
-- **Audio Guaranteed**: MediaRecorder captures browser's muxed stream with audio
+- **Hidden Content**: Finds videos in closed modals, popups, and accordions
+- **Multiple Formats**: Direct files (MP4, WebM), Adaptive streams (HLS, DASH)
+
+#### Smart Features
+- **Video Previews**: Thumbnail with duration for HTML5 videos
+- **Individual Titles**: Each video shows page title and format
+- **Individual Progress**: Separate progress bar for each download
+- **Unique Filenames**: Includes video ID to prevent file replacement
+- **Quality Detection**: Automatically selects highest quality
+- **Parallel Downloads**: Download multiple videos simultaneously
+
+#### Download Methods
+
+**🟢 Direct Download (MP4, WebM, MOV)**
+- One-click download with progress tracking
+- Real-time speed and size display
+- Supports cancellation
+
+**🔵 HLS Streams (Auto-merge with FFmpeg)**
+- **Native Host Integration**: Automatic audio+video merging
+- **Status Indicator**: Shows FFmpeg availability (✅ ready / ⚠️ not available)
+- **Process**: Downloads video → Downloads audio → Merges automatically → Single MP4 file
+- **Time**: ~30-35 seconds total (5s video + 5s audio + 25s merge)
+- **Fallback**: Manual merge instructions if FFmpeg not available
+
+**🟡 Vimeo Iframe**
+- Opens iframe in background tab
+- Captures HLS stream automatically
+- Downloads via FFmpeg merge
+- Closes tab after extraction
+
+**🟡 YouTube Iframe**
+- Attempts auto-extraction from iframe
+- Detects HTML5 video element
+- Shows warning if blob URL detected
+- Fallback to page opening with yt-dlp suggestion
 
 ### 🎨 Additional Features
-- **Beautiful UI**: Modern, gradient-themed interface
-- **Statistics Tracking**: Keep track of how many pages you've saved
-- **Cross-Platform**: Works on any operating system that supports Chrome
+- **Beautiful UI**: Modern, gradient-themed interface with icons
+- **Statistics Tracking**: Keep track of saved pages
+- **Modular Architecture**: Clean, maintainable code structure
+- **Cross-Platform**: Works on any OS that supports Chrome
 
 ## 🚀 Installation
 
-### From Source
+### Quick Install
 
-1. Clone or download this repository
-2. Open Chrome and navigate to `chrome://extensions/`
-3. Enable "Developer mode" in the top right corner
-4. Click "Load unpacked"
-5. Select the `grabber-ext` directory
-6. When prompted, grant permissions to access web pages
+1. **Clone Repository**
+   ```bash
+   git clone <repository-url>
+   cd grabber-ext
+   ```
 
-**Note**: The extension requires permission to access http and https pages to extract and save content. This is normal for page saving extensions.
+2. **Load Extension**
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" (top right)
+   - Click "Load unpacked"
+   - Select the `grabber-ext` directory
+   - Grant permissions when prompted
+
+3. **Optional: Setup FFmpeg Native Host** (for automatic HLS merging)
+   ```bash
+   chmod +x setup_native_host.sh
+   ./setup_native_host.sh
+   ```
+   
+   This installs:
+   - FFmpeg (if not present)
+   - Python Native Host script
+   - Chrome Native Messaging manifest
+   
+   See [FFmpeg Setup](#-ffmpeg-native-host-setup) for details.
 
 ## 📖 Usage
 
-### HTML Export
-1. **Open the Extension**: Click on the Nano Page Saver icon in your browser toolbar
-2. **Select Format**: Click the "HTML" button (selected by default)
-3. **Configure Options**: Choose your save preferences:
-   - ✓ Include images - Embeds images as base64 data URLs
-   - ✓ Include CSS styles - Preserves page styling
-   - ☐ Keep JavaScript - Enables interactive elements (buttons, animations, etc.)
-   - ☐ Minify HTML - Reduces file size by removing whitespace
-4. **Save**: Click the "Save as HTML" button
-5. **Choose Location**: Select where to save the HTML file
+### Save as HTML
+
+1. Click the extension icon
+2. Select "HTML" tab (default)
+3. Configure options:
+   - ✓ Include images
+   - ✓ Include CSS styles
+   - ☐ Keep JavaScript (for interactive elements)
+   - ☐ Minify HTML
+4. Click "Save as HTML"
+5. Choose save location
+
+### Save as PDF
+
+1. Click the extension icon
+2. Select "PDF" tab
+3. Configure options:
+   - ✓ Extract hidden content
+   - ✓ Remove interactive controls
+   - ☐ Include videos
+   - ☐ Preserve colors
+4. Click "Save as PDF"
+5. Chrome print dialog opens automatically
+6. Select "Save as PDF" → Save
+
+### Download Videos
+
+1. Click the extension icon
+2. Videos section appears automatically if videos found
+3. Each video shows:
+   - **Title**: Page/video title
+   - **Format**: HTML5 Video, Vimeo, YouTube, HLS, etc.
+   - **Preview**: Thumbnail with duration (HTML5 only)
+   - **Info**: Download method and estimated time
+4. Click download button for the video you want
+5. Monitor progress in individual progress bar
+6. Files saved with unique IDs (no replacements)
+
+**Video Types:**
+
+- **HTML5 Video** → Direct download or record playback
+- **Vimeo** → Auto-extract HLS → FFmpeg merge
+- **YouTube** → Try auto-extract (may need yt-dlp)
+- **HLS Network** → FFmpeg auto-merge or manual download
+- **Direct MP4/WebM** → Instant download
+
+## 🔧 FFmpeg Native Host Setup
+
+### What is it?
+
+The Native Host is a bridge between the Chrome extension and FFmpeg on your system. It enables **automatic merging** of HLS video+audio files into a single playable MP4.
+
+### Installation
+
+**Automatic Setup:**
+```bash
+./setup_native_host.sh
+```
+
+This script:
+1. Checks/installs FFmpeg
+2. Creates Python Native Host script (`~/.local/share/chrome-native-messaging/video_merger_host.py`)
+3. Installs Chrome manifest (`~/.local/share/chrome-native-messaging/com.nanopagesaver.videomerger.json`)
+4. Detects and sets correct Extension ID
+
+**Manual Setup:**
+
+1. **Install FFmpeg:**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install ffmpeg
+   
+   # macOS
+   brew install ffmpeg
+   ```
+
+2. **Get Extension ID:**
+   - Go to `chrome://extensions/`
+   - Enable Developer mode
+   - Find "Nano Page Saver"
+   - Copy the ID (e.g., `abcdefghijklmnopqrstuvwxyz123456`)
+
+3. **Update Extension ID:**
+   ```bash
+   ./update_extension_id.sh YOUR_EXTENSION_ID
+   ```
+
+### Verification
+
+Open the extension → If you see:
+- ✅ **"FFmpeg ready - auto-merge enabled"** → Working!
+- ⚠️ **"Checking FFmpeg..."** → Not available
+
+## 🎯 Features in Detail
 
 ### PDF Export
-1. **Open the Extension**: Click on the Nano Page Saver icon in your browser toolbar
-2. **Select Format**: Click the "PDF" button
-3. **Configure Options**: Choose processing preferences:
-   - ✓ Extract hidden content - Discovers popups, tooltips, and dropdowns
-   - ✓ Remove interactive controls - Strips buttons, inputs, and navigation
-   - ☐ Preserve original text and background colors - Keep page's original color scheme
-4. **Save**: Click the "Save as PDF" button
-5. **Print Dialog**: Chrome's print dialog will open automatically
-   - Select **"Save as PDF"** as Destination
-   - Click **Save** button
-   - Tab will close automatically after saving
-
-## 🎨 Features in Detail
-
-### HTML Export Features
-
-#### Accordion & Hidden Content Support
-The extension automatically expands all collapsed accordion panels and hidden sections before extraction:
-- Bootstrap accordions (`.collapse` class)
-- E-learning platform accordions (`.accordion__body` class)
-- Elements with `aria-hidden="true"` or `aria-expanded="false"`
-- Hidden `<details>` elements
-- Generic hidden content with `display:none` or `.hidden` class
-
-This ensures that all page content is captured, including content that's collapsed or hidden by default.
-
-#### Image Handling
-When "Include images" is enabled, the extension attempts to convert all images to base64 data URLs, making the saved HTML file completely self-contained. Images that can't be converted (due to CORS restrictions) will retain their original URLs.
-
-#### Style Preservation
-The extension can inline both external stylesheets and computed styles, ensuring that the saved page looks as close as possible to the original. This includes:
-- External CSS files
-- Inline styles
-- Computed styles for important elements
-
-#### JavaScript Preservation
-By default, all JavaScript is removed for security reasons. However, you can enable "Keep JavaScript" to:
-- Preserve interactive elements (dropdowns, accordions, modals)
-- Keep animations and dynamic content
-- Maintain form functionality
-- **Warning**: Only enable for trusted pages, as scripts can pose security risks
-
-#### HTML Minification
-Enable this option to remove unnecessary whitespace from the HTML, reducing file size without affecting appearance.
-
-### Video Download Features
-
-#### Automatic Video Detection
-When you open the extension, it automatically scans the current page for videos:
-- **HTML5 Videos**: `<video>` tags with source URLs
-- **YouTube**: Embedded YouTube videos (iframe embeds)
-- **Vimeo**: Embedded Vimeo videos
-
-#### Video Download Options
-- **HTML5 Videos & Network Captures**: Records video playback and saves to disk
-  - Uses MediaRecorder API to capture video stream
-  - Saves as .webm format
-  - Records current playback in real-time
-- **YouTube/Vimeo**: Opens video page in new tab (use external tools like yt-dlp)
-
-Videos are displayed in a dedicated "🎥 Videos Found on Page" section at the bottom of the popup.
-
-**Video Detection Methods:**
-1. **Network Monitoring**: Captures video URLs from HTTP requests (MP4, WebM, HLS manifests, DASH)
-2. **DOM Scanning**: Finds `<video>` elements with their sources
-3. **Embed Detection**: Identifies YouTube and Vimeo players
-
-**Video Types and Actions:**
-
-🟢 **Direct Download (Green badge)**
-- File types: MP4, WebM, OGG, MOV
-- Action: Click "Download [FORMAT]" to start immediate download
-- Features:
-  - Real-time progress bar with download speed
-  - Displays file size and remaining time
-  - Can cancel download mid-progress
-  - Multiple simultaneous downloads supported
-
-🔵 **HLS Streams (Blue/Green badge)**
-- Format: HLS (.m3u8)
-- Action: Click "Download HLS" to process the stream
-- **Intelligent Audio Handling:**
-  - 🟢 Simple HLS (audio in video): Downloads and merges segments → Single MP4 file
-  - 🔊 Separate audio tracks (Vimeo, etc.): **You choose the method**
-- Features:
-  - Automatic manifest parsing (master and variant playlists)
-  - Detects separate audio tracks automatically
-  - Selects highest quality by default
-  - User-friendly choice dialog
-  - No external tools required!
-  
-**🔊 Two methods for separate audio tracks:**
-
-1. **📥 Download as 2 files (FAST ~30 sec)**
-   - Downloads: `video_VIDEO.mp4` + `video_AUDIO.m4a`
-   - Need to merge: Online tools, FFmpeg, or VLC
-   - Merge instructions shown automatically
-   - Best for: Batch processing, offline merging
-   
-2. **🎥 Record playback (SLOW ~video length)**
-   - Downloads: Single `video.webm` file
-   - Ready to play immediately
-   - MediaRecorder captures browser's muxed stream
-   - Best for: One video, immediate playback
-
-🟡 **DASH Streams (Yellow badge)**
-- Format: DASH (.mpd)
-- Action: Click "Open URL" to access stream URL
-- Note: Requires external tools (Video DownloadHelper, yt-dlp) for processing
-
-🔵 **HTML5 Video Recording (Blue badge)**
-- Source: `<video>` elements on page
-- Action: Click "Start Recording"
-- Process:
-  1. Video plays automatically
-  2. Records using MediaRecorder API (2.5Mbps, WebM format)
-  3. Downloads when complete
-  4. Recording time = Video duration (max 5 minutes)
-
-🔴 **Vimeo iframe**
-- Action: Click "Open Vimeo Player"
-- Opens player in new tab where video can be recorded
-
-**Download Progress Section:**
-- Appears when downloads are active
-- Shows for each download:
-  - Status icon (⏳ downloading, ✓ completed, ✗ error)
-  - Filename
-  - Progress bar
-  - Download speed (MB/s)
-  - Downloaded/Total size
-  - Cancel button (while downloading)
-- Completed downloads auto-remove after 5 seconds
-
-### PDF Export Features
 
 #### Hidden Content Extraction
-The PDF processor intelligently searches for and extracts hidden content that users might miss:
-- **Modal Dialogs**: Popup windows and overlays that appear on user interaction
-- **Tooltips**: Hover text and aria-labels that provide additional information
-- **Dropdown Menus**: All options in select elements and menu lists
-- **Expandable Sections**: Content hidden in accordions and collapsible elements
-- **Accordion Panels**: Automatically expands Bootstrap, e-learning platform, and custom accordion content
-  - Handles `aria-hidden="true"`, `aria-expanded="false"` attributes
-  - Expands `.collapse`, `.accordion__body` classes
-  - Forces visibility of all hidden content before extraction
+Automatically finds and includes:
+- Modal dialogs with `[role="dialog"]`, `[aria-modal="true"]`
+- Accordion panels (`.accordion__body`, `.collapse`)
+- Hidden sections with `[aria-hidden="true"]`, `[hidden]`, `.hidden`
+- Tooltips and `aria-label` text
+- Background images from CSS
 
-All extracted content is clearly labeled and organized in dedicated sections.
+#### Accordion Support
+Handles accordion headers correctly:
+- Extracts headers even from complex IDs
+- Searches parent elements for headers
+- Matches by index if ID-based search fails
+- Prepends headers to accordion bodies
 
-#### Interactive Element Removal
-To create a clean, readable PDF, the extension removes:
-- Form inputs (buttons, text fields, checkboxes)
-- Navigation menus and toolbars
-- Social media sharing buttons
-- Advertisement containers
-- JavaScript and other non-content elements
+#### Smart Image Processing
+- Converts CSS background-images to `<img>` tags
+- Filters by container selectors (`.carousel__image`, `.explorer__item`, etc.)
+- Preserves text content (no overwriting)
+- Deduplicates images
 
-#### Content Structuring
-The processor maintains the original page structure:
-- Preserves document order and hierarchy
-- Keeps images in their original positions with correct sizes
-- Maintains logical reading order
-- Smart image sizing: uses container size if smaller than intrinsic size
-- Optional: Convert all text to black for better readability (default)
-- Optional: Preserve original text and background colors
+### Video Download
 
-## 🔧 Technical Details
+#### Detection Methods
+1. **DOM Scanning**: Finds `<video>` elements (even in hidden modals)
+2. **Iframe Detection**: Vimeo and YouTube embeds
+3. **Network Monitoring**: Captures HLS/DASH manifests and direct files
+4. **Temporary Expansion**: Shows hidden modals/accordions briefly to detect all videos
 
-### Manifest Version
-This extension uses Manifest V3, the latest Chrome extension standard.
+#### Thumbnail Generation
+For HTML5 videos:
+1. Tries using `video.poster` attribute
+2. Loads video metadata (max 2 second wait)
+3. Captures first frame to canvas
+4. Converts to JPEG thumbnail
+5. Displays with duration overlay
 
-### Permissions
-- `activeTab`: Temporary access to the current tab when extension is clicked
-- `downloads`: Ability to save files and track download progress
-- `storage`: Store extension settings, statistics, and download history
-- `scripting`: Execute content processing scripts for PDF generation and video detection
-- `webRequest`: Monitor network requests to capture video URLs
-- `optional_host_permissions`: Access to http and https pages for content extraction (requested on first use)
+#### HLS Processing
+1. **Parse Manifest**: Detects master/variant playlists
+2. **Check Audio**: Determines if audio is separate
+3. **Download Strategy**:
+   - **Simple HLS** → Download segments → Merge locally
+   - **Separate audio** → Download video + audio → FFmpeg merge
+4. **Progress Tracking**: Individual progress for each file
 
-### File Structure
+#### Vimeo Auto-Extraction
+1. Detects `iframe[src*="vimeo.com"]`
+2. Opens iframe in background tab (not visible)
+3. Waits 5 seconds for HLS manifest
+4. Captures network request
+5. Closes tab
+6. Downloads HLS via FFmpeg merge
+
+#### YouTube Auto-Extraction
+1. Detects `iframe[src*="youtube.com"]`
+2. Opens iframe in background tab
+3. Tries to find HTML5 video element
+4. If blob URL → Shows warning + suggestion to use yt-dlp
+5. If direct URL → Attempts download
+6. Fallback → Opens YouTube page
+
+### File Naming
+All downloads include unique identifiers:
+```
+PageTitle_VideoID_Index.ext
+```
+Examples:
+- `Module_2_Technology_547840560_1.mp4` (Vimeo ID)
+- `Video_Page_playlist_2.mp4` (HLS segment)
+- `Tutorial_abc12345_3.webm` (URL hash)
+- `Lecture_1760138950_1.mp4` (Timestamp fallback)
+
+## 📁 Project Structure
+
 ```
 grabber-ext/
-├── manifest.json       # Extension configuration
-├── popup.html         # Extension popup interface
-├── popup.css          # Popup styling
-├── popup.js           # Popup functionality with PDF processor
-├── content.js         # Content script for page access
-├── background.js      # Background service worker
-├── icons/             # Extension icons
+├── manifest.json           # Extension configuration (v3.3.8)
+├── popup.html             # Extension UI
+├── popup.css              # Styling
+├── popup.js               # Main logic + orchestration
+├── background.js          # Service worker (network monitoring)
+├── .gitignore            # Git ignore rules
+├── README.md             # This file
+├── setup_native_host.sh  # FFmpeg setup script
+├── update_extension_id.sh # Extension ID updater
+├── icons/                # Extension icons
 │   ├── icon16.png
 │   ├── icon32.png
 │   ├── icon48.png
 │   └── icon128.png
-└── README.md          # This file
+└── modules/              # Modular functionality
+    ├── video-detector.js    # Video detection & UI display
+    ├── download-manager.js  # Download tracking & progress
+    ├── hls-downloader.js    # HLS manifest parsing & download
+    ├── native-merger.js     # FFmpeg Native Host integration
+    ├── pdf-processor.js     # PDF content extraction
+    ├── html-processor.js    # HTML processing & export
+    └── utils.js            # Utility functions
 ```
 
-## 🛠️ Development
+## 🔒 Permissions
 
-### Requirements
-- Chrome/Chromium browser (version 88 or later)
-- Basic knowledge of HTML, CSS, and JavaScript
-
-### Making Changes
-1. Edit the source files
-2. Go to `chrome://extensions/`
-3. Click the refresh icon on the Nano Page Saver card
-4. Test your changes
-
-## 📝 Notes
-
-- **Security**: The extension removes all `<script>` tags from saved pages for security reasons
-- **CORS**: Some external resources may not be accessible due to Cross-Origin Resource Sharing (CORS) policies
-- **File Size**: Embedding images as base64 can significantly increase file size
+- **activeTab**: Access current tab when extension is opened
+- **downloads**: Save files and track download progress
+- **storage**: Store settings and statistics
+- **scripting**: Execute content processing scripts
+- **webRequest**: Monitor network requests for video URLs
+- **nativeMessaging**: Communicate with FFmpeg Native Host
+- **optional_host_permissions**: Access http/https pages (requested on first use)
 
 ## 🐛 Troubleshooting
 
-### HTML Export Issues
+### PDF Issues
 
-**Problem**: Images don't appear in saved pages
-- **Solution**: Make sure "Include images" is checked. Some images may be blocked by CORS policies.
+**Content missing?**
+- Enable "Extract hidden content"
+- Scroll through entire page before saving
+- Wait for lazy-loaded content
 
-**Problem**: Styling looks different
-- **Solution**: Enable "Include CSS styles" option. Some dynamically loaded styles may not be captured.
+**Accordion headers missing?**
+- Should be automatic in v3.3.8+
+- Check console for extraction logs
 
-### PDF Export Issues
+### Video Issues
 
-**Problem**: PDF doesn't include all content
-- **Solution**: Make sure "Extract hidden content" and "Structure content" are both enabled.
+**No videos detected?**
+- Scroll through page (lazy-loading)
+- Open modals/popups manually (extension will detect)
+- Check if page uses custom players
 
-**Problem**: PDF has too much clutter
-- **Solution**: Enable "Remove interactive controls" to clean up the output.
+**Vimeo download fails?**
+- ✅ FFmpeg ready? Check status indicator
+- Try reloading page and extension
+- Check console for error messages
 
-**Problem**: Some content still missing from PDF
-- **Solution**: Some dynamically loaded content may not be captured if it hasn't been loaded in the page yet. Make sure to:
-  - Scroll through the entire page before saving
-  - Wait for any lazy-loaded content to appear
-  - Interact with dropdowns and tabs to trigger content loading
-  - Note: Version 1.5.7+ automatically expands all accordion panels and `aria-hidden` content
+**YouTube download fails?**
+- YouTube often uses blob URLs (cannot download)
+- Use `yt-dlp` or `youtube-dl` for YouTube:
+  ```bash
+  yt-dlp https://youtube.com/watch?v=VIDEO_ID
+  ```
 
-**Problem**: PDF formatting looks wrong
-- **Solution**: The PDF uses a clean, readable format by default. The original page styling is intentionally simplified for better readability.
+**HLS has no audio?**
+- If FFmpeg not available, you'll get 2 separate files
+- Merge manually with FFmpeg:
+  ```bash
+  ffmpeg -i video.mp4 -i audio.m4a -c copy output.mp4
+  ```
+- Or use online tools (search "merge video audio online")
 
-### General Issues
+**No thumbnail for video?**
+- Normal for network-captured resources (HLS, DASH)
+- Thumbnails only for HTML5 `<video>` elements
+- Extension tries `poster` attribute first, then captures frame
 
-**Problem**: Extension doesn't appear in toolbar
-- **Solution**: Pin the extension by clicking the puzzle icon in Chrome's toolbar and selecting the pin icon next to Nano Page Saver.
+### FFmpeg Native Host
 
-**Problem**: Print dialog closes immediately
-- **Solution**: This is normal. The print dialog will open automatically. Use "Save as PDF" in the destination dropdown.
+**Status shows "Checking FFmpeg..."?**
+1. Run `./setup_native_host.sh`
+2. Check Extension ID matches:
+   ```bash
+   ./update_extension_id.sh YOUR_EXTENSION_ID
+   ```
+3. Verify FFmpeg installed:
+   ```bash
+   ffmpeg -version
+   ```
+4. Check manifest exists:
+   ```bash
+   cat ~/.local/share/chrome-native-messaging/com.nanopagesaver.videomerger.json
+   ```
 
-### Video Download Issues
+**Merge fails?**
+- Check downloads folder for temp files (`*_VIDEO.mp4`, `*_AUDIO.m4a`)
+- Check system logs: `journalctl -f | grep ffmpeg`
+- Run Native Host manually to test:
+  ```bash
+  python3 ~/.local/share/chrome-native-messaging/video_merger_host.py
+  ```
 
-**Problem**: No videos detected
-- **Solution**: The page might use custom video players or lazy-loading. Try scrolling through the page first.
+## 🆚 Comparison: Native Host vs Manual
 
-**Problem**: Can't download YouTube/Vimeo videos
-- **Solution**: These platforms use DRM. The extension opens the video page - use external tools like yt-dlp, youtube-dl, or specialized browser extensions.
+| Feature | With FFmpeg Native Host | Without Native Host |
+|---------|------------------------|---------------------|
+| HLS Download | ✅ Automatic merge | ⚠️ 2 separate files |
+| User Action | Click once | Download + manual merge |
+| Time | ~35 seconds | Depends on tool |
+| Quality | Original | Original |
+| Ease of Use | 🟢 Very Easy | 🟡 Manual work |
+| Requirements | FFmpeg + Python | Any merge tool |
 
-**Problem**: HTML5 video download fails
-- **Solution**: Some videos are protected by CORS policies. The extension can only download publicly accessible videos.
+## 📝 Development
+
+### Making Changes
+
+1. Edit source files
+2. Go to `chrome://extensions/`
+3. Click refresh button on extension card
+4. Test changes
+
+### Debugging
+
+- **Popup**: Right-click popup → Inspect → Console
+- **Background**: `chrome://extensions/` → Inspect views: service worker
+- **Content Scripts**: F12 on page → Console
+
+### Module Structure
+
+The extension uses ES6 modules for clean organization:
+- `video-detector.js`: Exports `detectVideos()`, `displayVideos()`
+- `download-manager.js`: Exports `DownloadManager` class
+- `hls-downloader.js`: Exports `HLSDownloader` class
+- `native-merger.js`: Exports `NativeMerger` class
+- `pdf-processor.js`: Exports PDF processing functions
+- `html-processor.js`: Exports HTML processing functions
+- `utils.js`: Exports utility functions
 
 ## 📄 License
 
@@ -339,32 +433,77 @@ This project is open source and available for personal and commercial use.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to submit issues or pull requests.
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
 ## 📮 Support
 
-If you encounter any issues or have suggestions, please create an issue in the repository.
+Issues or suggestions? Create an issue in the repository.
 
 ---
 
 ## 📋 Changelog
 
-### Version 1.5.7 (Latest)
-**Bug Fix**: Fixed accordion content not being saved
-- ✅ Automatically expands all collapsed accordion panels before extraction
-- ✅ Handles Bootstrap `.collapse` and e-learning `.accordion__body` classes
-- ✅ Expands all `aria-hidden="true"` and `aria-expanded="false"` elements
-- ✅ Forces visibility of hidden `<details>` elements
-- ✅ Works for both HTML and PDF exports
-- 🎯 Critical fix for e-learning platforms and accordion-based layouts
+### Version 3.3.8 (Current)
+- ✨ **YouTube Support**: Auto-extraction from iframes (similar to Vimeo)
+- ✨ Attempts to find HTML5 video element in YouTube embed
+- ⚠️ Shows warning if blob URL detected (use yt-dlp recommendation)
+- 🔄 Fallback to opening YouTube page
+
+### Version 3.3.7
+- ✨ **Video Previews**: Thumbnails with duration for HTML5 videos
+- 🐛 **Fixed Duration**: Proper validation and formatting (MM:SS)
+- ⚡ **Async Thumbnails**: Waits for video metadata (max 2s timeout)
+- 📊 Falls back to `poster` attribute if frame capture fails
+
+### Version 3.3.6
+- ✨ **Unique Filenames**: Videos include ID to prevent file replacement
+- 📝 Format: `PageTitle_VideoID_Index.ext`
+- 🎯 Uses Vimeo ID, URL hash, or timestamp
+
+### Version 3.3.5
+- 🐛 **Critical Fix**: Vimeo deduplication logic corrected
+- ✅ All unique videos now display properly
+- 🗑️ Removed obsolete `mux.min.js` reference
+
+### Version 3.3.0
+- ✨ **Native Host Integration**: FFmpeg auto-merge for HLS
+- ✨ **Vimeo Auto-Extract**: Background tab extraction (~5s)
+- ✨ **Individual Progress**: Separate progress bar per video
+- ✨ **Video Titles**: Shows page title and format for each video
+- 📊 **Status Indicator**: FFmpeg availability shown at top
+- 🗑️ Removed recording functionality (replaced by Native Host)
+
+### Version 3.2.0
+- ✨ **Modular Architecture**: Split into 7 logical modules
+- 📁 Clean project structure
+- 🔧 Better maintainability
+
+### Version 3.1.0
+- ✨ **Hidden Video Detection**: Finds videos in closed modals/popups
+- ⚡ Temporary expansion of hidden containers
+- 🔍 Detects videos in accordions, dropdowns, hidden sections
+
+### Version 3.0.0
+- ✨ **Advanced Video Detection**: Network monitoring + DOM scanning
+- ✨ **HLS Support**: Manifest parsing and segment download
+- ✨ **Progress Tracking**: Real-time download progress
+- ✨ **Multiple Videos**: Parallel downloads with individual tracking
+
+### Version 1.5.7
+- ✅ Accordion content extraction fixed
+- ✅ PDF: Automatically expands hidden content
 
 ### Version 1.5.6
-- PDF export with intelligent content extraction
-- Hidden content detection (modals, tooltips, collapsed sections)
-- Video detection and recording
-- HTML export with inline resources
+- 🎉 Initial release
+- 📄 HTML and PDF export
+- 🎥 Basic video detection
 
 ---
 
-Made with ❤️ for preserving web content
+**Made with ❤️ for preserving web content**
 
+**Current Version: 3.3.8** | [Report Issues](https://github.com/your-repo/issues) | [Contribute](https://github.com/your-repo/pulls)
