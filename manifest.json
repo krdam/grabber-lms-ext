@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Nano Page Saver",
-  "version": "3.3.3",
-  "description": "Save web pages as HTML or PDF, detect videos in closed modals/popups, individual progress bars!",
+  "version": "3.3.8",
+  "description": "Save web pages as HTML or PDF, auto-extract YouTube/Vimeo videos, previews + unique IDs!",
   "permissions": [
     "activeTab",
     "downloads",

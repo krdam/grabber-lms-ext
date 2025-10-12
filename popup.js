@@ -307,18 +307,18 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     
     for (const priority of priorityOrder) {
       for (const video of allVideos) {
-        // Special handling for Vimeo - deduplicate by videoId
+        const videoKey = video.url || video.iframeUrl || video.sources?.[0] || '';
+        
+        // Check if already added by URL
+        if (seenUrls.has(videoKey)) continue;
+        
+        // Special handling for Vimeo - check by videoId
         if (video.type === 'Vimeo Player' && video.videoId) {
           if (seenVimeoIds.has(video.videoId)) {
             console.log(`Skipping duplicate Vimeo: ${video.videoId}`);
             continue;
           }
-          seenVimeoIds.add(video.videoId);
         }
-        
-        const videoKey = video.url || video.iframeUrl || video.sources?.[0] || '';
-        
-        if (seenUrls.has(videoKey)) continue;
         
         const matchesPriority = 
           (priority === 'HTML5 Video' && video.type === 'HTML5 Video') ||
@@ -329,22 +329,35 @@ chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         if (matchesPriority) {
           uniqueVideos.push(video);
           seenUrls.add(videoKey);
+          
+          // Mark Vimeo as seen ONLY after adding
+          if (video.type === 'Vimeo Player' && video.videoId) {
+            seenVimeoIds.add(video.videoId);
+            console.log(`Added Vimeo video: ${video.videoId}`);
+          }
         }
       }
     }
     
     // Add any remaining videos not in priority list
     for (const video of allVideos) {
+      const videoKey = video.url || video.iframeUrl || video.sources?.[0] || '';
+      
+      // Skip if already added
+      if (seenUrls.has(videoKey)) continue;
+      
       // Skip Vimeo duplicates
       if (video.type === 'Vimeo Player' && video.videoId) {
         if (seenVimeoIds.has(video.videoId)) continue;
-        seenVimeoIds.add(video.videoId);
       }
       
-      const videoKey = video.url || video.iframeUrl || video.sources?.[0] || '';
-      if (!seenUrls.has(videoKey)) {
-        uniqueVideos.push(video);
-        seenUrls.add(videoKey);
+      // Add video
+      uniqueVideos.push(video);
+      seenUrls.add(videoKey);
+      
+      // Mark Vimeo as seen AFTER adding
+      if (video.type === 'Vimeo Player' && video.videoId) {
+        seenVimeoIds.add(video.videoId);
       }
     }
     
@@ -369,7 +382,10 @@ window.downloadVideoHandler = async (video, index, tabId) => {
       
       const pageTitle = document.getElementById('pageTitle').textContent || 'video';
       const extension = video.format ? `.${video.format.toLowerCase()}` : '.mp4';
-      const filename = sanitizeFilename(pageTitle) + `_${index + 1}` + extension;
+      
+      // Add video ID or unique identifier to prevent file replacement
+      const videoId = video.videoId || video.url?.split('/').pop()?.split('?')[0]?.substring(0, 8) || Date.now();
+      const filename = sanitizeFilename(pageTitle) + `_${videoId}_${index + 1}` + extension;
       
       const result = await downloadManager.startDirectDownload(video.url, filename, video);
       
@@ -424,7 +440,10 @@ window.downloadVideoHandler = async (video, index, tabId) => {
         statusCallback('Starting HLS segment download (audio included)...', 'info');
         
         const pageTitle = document.getElementById('pageTitle').textContent || 'video';
-        const filename = sanitizeFilename(pageTitle) + `_${index + 1}.mp4`;
+        
+        // Add video ID or unique identifier to prevent file replacement
+        const videoId = video.videoId || video.url?.split('/').pop()?.split('?')[0]?.substring(0, 8) || Date.now();
+        const filename = sanitizeFilename(pageTitle) + `_${videoId}_${index + 1}.mp4`;
         
         const result = await downloadManager.startSegmentedDownload(video.url, filename, video, index);
         
@@ -494,10 +513,69 @@ window.downloadVideoHandler = async (video, index, tabId) => {
       return;
     }
     
-    // Handle YouTube - can't download, open page
-    if (video.type === 'YouTube') {
-      chrome.tabs.create({ url: video.url });
-      statusCallback('ℹ YouTube opened. Use yt-dlp for download.', 'info');
+    // Handle YouTube - try to extract video from iframe
+    if (video.type === 'YouTube' && video.embedUrl) {
+      statusCallback('Extracting video from YouTube iframe...', 'info');
+      
+      try {
+        // Open iframe in background tab to detect video element
+        const newTab = await chrome.tabs.create({ 
+          url: video.embedUrl,
+          active: false  // Background tab
+        });
+        
+        // Wait for video to load
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Try to detect video element on YouTube page
+        const detectionResults = await chrome.scripting.executeScript({
+          target: { tabId: newTab.id },
+          func: detectVideos
+        });
+        
+        if (detectionResults && detectionResults[0] && detectionResults[0].result) {
+          const detectedVideos = detectionResults[0].result;
+          const html5Videos = detectedVideos.filter(v => v.type === 'HTML5 Video');
+          
+          if (html5Videos.length > 0) {
+            statusCallback('✓ Found HTML5 video! Starting download...', 'success');
+            
+            // Close the tab
+            chrome.tabs.remove(newTab.id);
+            
+            // Try to download the video (usually blob URL)
+            const youtubeVideo = {
+              ...video,
+              ...html5Videos[0],
+              type: 'YouTube Video',
+              requiresProcessing: false
+            };
+            
+            // If blob URL, need to record from the video element
+            if (html5Videos[0].sources[0]?.includes('blob:')) {
+              statusCallback('⚠️ YouTube uses blob URL - cannot download directly', 'warning');
+              statusCallback('💡 Tip: Use yt-dlp or similar tools for YouTube', 'info');
+            } else {
+              // Recursively call handler with detected video
+              return window.downloadVideoHandler(youtubeVideo, index, tabId);
+            }
+          } else {
+            // No HTML5 video found
+            chrome.tabs.remove(newTab.id);
+            statusCallback('✗ Could not find downloadable video. Opening YouTube page...', 'warning');
+            chrome.tabs.create({ url: video.url, active: true });
+            statusCallback('💡 Tip: Use yt-dlp or browser extensions for YouTube', 'info');
+          }
+        } else {
+          chrome.tabs.remove(newTab.id);
+          statusCallback('✗ Could not detect video. Opening YouTube page...', 'error');
+          chrome.tabs.create({ url: video.url, active: true });
+        }
+      } catch (error) {
+        statusCallback('✗ Error extracting YouTube video: ' + error.message, 'error');
+        statusCallback('💡 Opening YouTube page - use yt-dlp for download', 'info');
+        chrome.tabs.create({ url: video.url, active: true });
+      }
       return;
     }
     
@@ -507,9 +585,13 @@ window.downloadVideoHandler = async (video, index, tabId) => {
       statusCallback('Attempting direct download...', 'info');
       
       try {
+        const pageTitle = document.getElementById('pageTitle').textContent || 'video';
+        const videoId = video.videoId || video.url?.split('/').pop()?.split('?')[0]?.substring(0, 8) || Date.now();
+        const filename = sanitizeFilename(pageTitle) + `_${videoId}_${index + 1}.mp4`;
+        
         await chrome.downloads.download({
           url: video.url,
-          filename: sanitizeFilename(document.getElementById('pageTitle').textContent || 'video') + `_${index + 1}.mp4`,
+          filename: filename,
           saveAs: true
         });
         
