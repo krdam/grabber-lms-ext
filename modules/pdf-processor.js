@@ -150,7 +150,240 @@ export async function saveAsPdf(options, dependencies) {
 }
 
 // Extract page content for PDF (injected function)
-export function extractPageContentForPdfWrapper(options) {
+export async function extractPageContentForPdfWrapper(options) {
+  const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  const DATASET_IMAGE_KEYS = [
+    'src',
+    'original',
+    'originalSrc',
+    'lazy',
+    'lazySrc',
+    'lazySrcset',
+    'lazySrcSet',
+    'image',
+    'imageSrc',
+    'bg',
+    'bgSrc',
+    'background',
+    'backgroundImage',
+    'defaultSrc',
+    'fallbackSrc'
+  ];
+  
+  const ATTRIBUTE_IMAGE_KEYS = [
+    'data-src',
+    'data-srcset',
+    'data-sizes',
+    'data-src-mobile',
+    'data-src-desktop',
+    'data-original',
+    'data-original-src',
+    'data-lazy',
+    'data-lazy-src',
+    'data-lazy-srcset',
+    'data-image',
+    'data-image-src',
+    'data-bg',
+    'data-bg-src',
+    'data-background',
+    'data-background-image',
+    'data-default-src',
+    'data-placeholder'
+  ];
+  
+  const BACKGROUND_ATTRIBUTE_SELECTORS = [
+    '[data-bg]',
+    '[data-bg-src]',
+    '[data-background]',
+    '[data-background-image]',
+    '[data-image]',
+    '[data-image-src]',
+    '[data-lazy-background]',
+    '[data-lazy-bg]',
+    '[data-default-src]'
+  ];
+  
+  const DATASET_BACKGROUND_KEYS = [
+    'bg',
+    'bgSrc',
+    'background',
+    'backgroundImage',
+    'image',
+    'imageSrc',
+    'lazyBackground',
+    'lazyBg',
+    'defaultSrc'
+  ];
+  
+  const SOURCESET_DATASET_KEYS = [
+    'srcset',
+    'srcSet',
+    'lazySrcset',
+    'lazySrcSet'
+  ];
+  
+  const SOURCESET_ATTRIBUTE_KEYS = [
+    'data-srcset',
+    'data-src-set',
+    'data-lazy-srcset',
+    'data-lazy-src-set'
+  ];
+  
+  const toAbsoluteUrl = (url) => {
+    if (!url) return url;
+    if (/^(data:|blob:|https?:)/i.test(url)) return url;
+    try {
+      return new URL(url, document.baseURI).href;
+    } catch (e) {
+      return url;
+    }
+  };
+  
+  const normalizeBackgroundValue = (value) => {
+    if (!value) return null;
+    if (/\bgradient\b/i.test(value)) return null;
+    const match = value.match(/url\(["']?([^"')]+)["']?\)/i);
+    if (match && match[1]) {
+      return toAbsoluteUrl(match[1]);
+    }
+    return toAbsoluteUrl(value);
+  };
+  
+  const observeImageElement = (img) => {
+    if (!img) return Promise.resolve();
+    if (img.complete && img.naturalHeight > 0) {
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      const timeout = setTimeout(resolve, 3500);
+      const done = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+  };
+  
+  const preloadImage = (url) => {
+    if (!url || url.startsWith('data:')) {
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      const timeout = setTimeout(resolve, 3500);
+      const loader = new Image();
+      loader.crossOrigin = 'anonymous';
+      loader.onload = loader.onerror = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      loader.src = url;
+    });
+  };
+  
+  const pickFirstValue = (el, datasetKeys, attributeKeys) => {
+    if (!el) return null;
+    const dataset = el.dataset || {};
+    for (const key of datasetKeys) {
+      if (dataset[key]) {
+        return dataset[key];
+      }
+    }
+    for (const attr of attributeKeys) {
+      const value = el.getAttribute(attr);
+      if (value) {
+        return value;
+      }
+    }
+    return null;
+  };
+  
+  const triggerLazyLoadScroll = async () => {
+    const originalScrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const maxScroll = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    const step = Math.max(window.innerHeight * 0.6, 200);
+    
+    for (let position = 0; position < maxScroll; position += step) {
+      window.scrollTo(0, position);
+      window.dispatchEvent(new Event('scroll'));
+      await wait(40);
+    }
+    
+    window.scrollTo(0, originalScrollTop);
+    window.dispatchEvent(new Event('scroll'));
+    await wait(60);
+  };
+  
+  const forceLoadLazyAssets = async () => {
+    const loadPromises = [];
+    
+    document.querySelectorAll('source').forEach(source => {
+      const srcsetCandidate = pickFirstValue(source, SOURCESET_DATASET_KEYS, SOURCESET_ATTRIBUTE_KEYS);
+      if (srcsetCandidate && !source.srcset) {
+        source.srcset = srcsetCandidate;
+      }
+    });
+    
+    document.querySelectorAll('img').forEach(img => {
+      const dataset = img.dataset || {};
+      
+      const srcsetCandidate = pickFirstValue(img, SOURCESET_DATASET_KEYS, SOURCESET_ATTRIBUTE_KEYS);
+      if (srcsetCandidate && !img.srcset) {
+        img.srcset = srcsetCandidate;
+      }
+      if (dataset.sizes && !img.sizes) {
+        img.sizes = dataset.sizes;
+      }
+      const srcCandidate = pickFirstValue(img, DATASET_IMAGE_KEYS, ATTRIBUTE_IMAGE_KEYS);
+      if (srcCandidate && (!img.src || img.src === '' || img.src === '#' || img.src.startsWith('data:') || img.src.includes('placeholder'))) {
+        img.src = toAbsoluteUrl(srcCandidate);
+      }
+      
+      if (img.getAttribute('loading') === 'lazy') {
+        img.setAttribute('loading', 'eager');
+      }
+      img.classList.remove('lazyload', 'lazy-load', 'lazyloaded', 'lazy');
+      
+      loadPromises.push(observeImageElement(img));
+    });
+    
+    const bgSelector = BACKGROUND_ATTRIBUTE_SELECTORS.join(', ');
+    if (bgSelector) {
+      document.querySelectorAll(bgSelector).forEach(elem => {
+        const backgroundCandidate = pickFirstValue(elem, DATASET_BACKGROUND_KEYS, ATTRIBUTE_IMAGE_KEYS);
+        const normalized = normalizeBackgroundValue(backgroundCandidate);
+        if (normalized) {
+          elem.style.backgroundImage = `url("${normalized}")`;
+          loadPromises.push(preloadImage(normalized));
+        }
+      });
+    }
+    
+    document.querySelectorAll('[style*="--lazy-background"]').forEach(elem => {
+      const value = getComputedStyle(elem).getPropertyValue('--lazy-background');
+      const normalized = normalizeBackgroundValue(value);
+      if (normalized) {
+        elem.style.backgroundImage = `url("${normalized}")`;
+        loadPromises.push(preloadImage(normalized));
+      }
+    });
+    
+    if (loadPromises.length) {
+      await Promise.race([
+        Promise.allSettled(loadPromises),
+        wait(4000)
+      ]);
+    }
+  };
+  
+  try {
+    await triggerLazyLoadScroll();
+    await forceLoadLazyAssets();
+  } catch (e) {
+    console.warn('Lazy asset preload failed:', e);
+  }
+  
   const doc = document.cloneNode(true);
   
   // Get page title
@@ -395,13 +628,10 @@ export function extractPageContentForPdfWrapper(options) {
     const elementsWithBgImage = [];
     
     allElements.forEach(elem => {
-      const bgImage = window.getComputedStyle(elem).backgroundImage;
-      if (bgImage && bgImage !== 'none') {
-        // Убедимся, что элемент не содержит много текста (скорее всего это именно изображение)
-        const textLength = elem.textContent.trim().length;
-        if (textLength < 100) { // Меньше 100 символов = вероятно контейнер изображения
-          elementsWithBgImage.push(elem);
-        }
+      const bgValue = window.getComputedStyle(elem).backgroundImage;
+      const normalized = normalizeBackgroundValue(bgValue);
+      if (normalized) {
+        elementsWithBgImage.push(elem);
       }
     });
     
@@ -426,82 +656,79 @@ export function extractPageContentForPdfWrapper(options) {
       }
       
       if (clonedElem) {
-        const bgImage = window.getComputedStyle(originalElem).backgroundImage;
-        if (bgImage && bgImage !== 'none') {
-          const urlMatch = bgImage.match(/url\(["']?([^"')]+)["']?\)/);
-          if (urlMatch && urlMatch[1]) {
-            const imgUrl = urlMatch[1];
-            
-            if (processedUrls.has(imgUrl)) return;
-            processedUrls.add(imgUrl);
-            
-            console.log(`Background-image ${idx + 1}:`, imgUrl);
-            
-            const allLoadedImages = document.querySelectorAll('img');
-            let foundImg = null;
-            
-            for (let loadedImg of allLoadedImages) {
-              if (loadedImg.src === imgUrl && loadedImg.complete && loadedImg.naturalHeight > 0) {
-                foundImg = loadedImg;
-                break;
-              }
+        const bgValue = window.getComputedStyle(originalElem).backgroundImage;
+        const normalized = normalizeBackgroundValue(bgValue);
+        if (normalized) {
+          if (processedUrls.has(normalized)) return;
+          processedUrls.add(normalized);
+          
+          console.log(`Background-image ${idx + 1}:`, normalized);
+          
+          const allLoadedImages = document.querySelectorAll('img');
+          let foundImg = null;
+          
+          for (let loadedImg of allLoadedImages) {
+            const absSrc = toAbsoluteUrl(loadedImg.src);
+            if (absSrc === normalized && loadedImg.complete && loadedImg.naturalHeight > 0) {
+              foundImg = loadedImg;
+              break;
             }
-            
-            let imgTag = '';
-            if (foundImg) {
-              try {
-                const base64 = imageToBase64(foundImg);
-                const imgWidth = foundImg.naturalWidth;
-                const imgHeight = foundImg.naturalHeight;
-                const containerWidth = originalElem.offsetWidth;
-                
-                let displayWidth = imgWidth;
-                let displayHeight = imgHeight;
-                
-                if (containerWidth > 0 && containerWidth < imgWidth) {
-                  displayWidth = containerWidth;
-                  displayHeight = Math.round(imgHeight * (containerWidth / imgWidth));
-                }
-                
-                const altText = originalElem.getAttribute('aria-label') || 
-                              originalElem.getAttribute('title') || 
-                              originalElem.getAttribute('alt') || '';
-                
-                imgTag = `<img src="${base64}" alt="${altText}" style="width: ${displayWidth}px; height: ${displayHeight}px; display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">`;
-                console.log(`  ✓ Converted to base64`);
-              } catch (e) {
-                console.warn('  → Error converting:', e);
-                imgTag = `<img src="${imgUrl}" alt="" style="max-width: 100%; height: auto; display: block; margin: 20px auto;">`;
+          }
+          
+          let imgTag = '';
+          if (foundImg) {
+            try {
+              const base64 = imageToBase64(foundImg);
+              const imgWidth = foundImg.naturalWidth;
+              const imgHeight = foundImg.naturalHeight;
+              const containerWidth = originalElem.offsetWidth;
+              
+              let displayWidth = imgWidth;
+              let displayHeight = imgHeight;
+              
+              if (containerWidth > 0 && containerWidth < imgWidth) {
+                displayWidth = containerWidth;
+                displayHeight = Math.round(imgHeight * (containerWidth / imgWidth));
               }
+              
+              const altText = originalElem.getAttribute('aria-label') || 
+                            originalElem.getAttribute('title') || 
+                            originalElem.getAttribute('alt') || '';
+              
+              imgTag = `<img src="${base64}" alt="${altText}" style="width: ${displayWidth}px; height: ${displayHeight}px; display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">`;
+              console.log(`  ✓ Converted to base64`);
+            } catch (e) {
+              console.warn('  → Error converting:', e);
+              imgTag = `<img src="${normalized}" alt="" style="max-width: 100%; height: auto; display: block; margin: 20px auto;">`;
+            }
+          } else {
+            const altText = originalElem.getAttribute('aria-label') || originalElem.getAttribute('title') || '';
+            imgTag = `<img src="${normalized}" alt="${altText}" style="max-width: 100%; height: auto; display: block; margin: 20px auto;">`;
+          }
+          
+          if (imgTag) {
+            // Проверяем, есть ли уже <img> внутри элемента
+            const hasChildImages = clonedElem.querySelector('img');
+            
+            if (!hasChildImages && !clonedElem.textContent.trim()) {
+              // Если элемент пустой или только фон - заменяем на изображение
+              clonedElem.innerHTML = imgTag;
+              clonedElem.style.backgroundImage = 'none';
+              clonedElem.style.display = 'block';
+              clonedElem.style.margin = '20px 0';
+              clonedElem.style.textAlign = 'center';
             } else {
-              const altText = originalElem.getAttribute('aria-label') || originalElem.getAttribute('title') || '';
-              imgTag = `<img src="${imgUrl}" alt="${altText}" style="max-width: 100%; height: auto; display: block; margin: 20px auto;">`;
+              // Если есть контент - создаём wrapper для изображения
+              const wrapper = document.createElement('div');
+              wrapper.innerHTML = imgTag;
+              wrapper.style.cssText = 'margin: 20px 0; text-align: center;';
+              
+              // Вставляем перед содержимым
+              clonedElem.insertBefore(wrapper, clonedElem.firstChild);
+              clonedElem.style.backgroundImage = 'none';
             }
             
-            if (imgTag) {
-              // Проверяем, есть ли уже <img> внутри элемента
-              const hasChildImages = clonedElem.querySelector('img');
-              
-              if (!hasChildImages && !clonedElem.textContent.trim()) {
-                // Если элемент пустой или только фон - заменяем на изображение
-                clonedElem.innerHTML = imgTag;
-                clonedElem.style.backgroundImage = 'none';
-                clonedElem.style.display = 'block';
-                clonedElem.style.margin = '20px 0';
-                clonedElem.style.textAlign = 'center';
-              } else {
-                // Если есть контент - создаём wrapper для изображения
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = imgTag;
-                wrapper.style.cssText = 'margin: 20px 0; text-align: center;';
-                
-                // Вставляем перед содержимым
-                clonedElem.insertBefore(wrapper, clonedElem.firstChild);
-                clonedElem.style.backgroundImage = 'none';
-              }
-              
-              extractedImages.push({ inserted: true });
-            }
+            extractedImages.push({ inserted: true });
           }
         }
       }
@@ -587,7 +814,7 @@ export function generateSimplePdfHtml(pageData, options) {
       color: #000 !important;
       max-width: 900px;
       margin: 0 auto;
-      padding: 30px 20px;
+      padding: 16px 20px 28px;
       background: white;
       font-size: 14px !important; /* Base font size */
     }
@@ -676,12 +903,12 @@ export function generateSimplePdfHtml(pageData, options) {
     
     /* Print optimization */
     @media print {
-      body { padding: 15px; }
+      body { padding: 8px 12px 20px; }
       img, h1, h2, h3, h4, h5, h6 {
         page-break-inside: avoid;
       }
       @page {
-        margin: 2cm;
+        margin: 12mm 14mm 18mm;
       }
     }
     
