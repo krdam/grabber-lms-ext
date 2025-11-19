@@ -21,6 +21,9 @@ const grantPermissionBtn = document.getElementById('grantPermissionBtn');
 const progressContainer = document.getElementById('progressContainer');
 const progressLabel = document.getElementById('progressLabel');
 const progressFill = document.getElementById('progressFill');
+const contextMenuStatus = document.getElementById('contextMenuStatus');
+const unlockContextBtn = document.getElementById('unlockContextBtn');
+const contextControl = document.querySelector('.context-control');
 
 // HTML options
 const includeImagesCheckbox = document.getElementById('includeImages');
@@ -40,6 +43,8 @@ const htmlOptions = document.getElementById('htmlOptions');
 const pdfOptions = document.getElementById('pdfOptions');
 
 let selectedFormat = 'html';
+let currentTabId = null;
+let contextMenuBlocked = false;
 
 // ===== INITIALIZE MANAGERS =====
 const statusCallback = (msg, type) => showStatus(msg, type, statusDiv);
@@ -109,6 +114,84 @@ grantPermissionBtn.addEventListener('click', async () => {
     console.error('Error requesting permission:', error);
     statusCallback('✗ Error requesting permission: ' + error.message, 'error');
   }
+});
+
+const updateContextMenuUI = () => {
+  if (!contextMenuStatus) return;
+  contextMenuStatus.textContent = contextMenuBlocked ? 'Blocked by page' : 'Available';
+  contextMenuStatus.classList.toggle('blocked', contextMenuBlocked);
+  if (unlockContextBtn) {
+    unlockContextBtn.disabled = !contextMenuBlocked;
+  }
+  contextControl?.classList.toggle('hidden', !contextMenuBlocked);
+};
+
+const detectContextMenuBlock = async (tabId) => {
+  if (!contextMenuStatus) return;
+  contextMenuStatus.textContent = 'Checking...';
+  contextMenuStatus.classList.remove('blocked');
+  contextControl?.classList.add('hidden');
+
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        try {
+          const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window });
+          const wasCanceled = !document.dispatchEvent(event);
+          return wasCanceled || event.defaultPrevented || event.returnValue === false;
+        } catch (error) {
+          console.error('Context menu detection helper failed', error);
+          return false;
+        }
+      }
+    });
+
+    contextMenuBlocked = !!(result && result.result);
+  } catch (error) {
+    console.error('Error checking context menu:', error);
+    contextMenuBlocked = false;
+  }
+
+  updateContextMenuUI();
+};
+
+const unblockContextMenu = async (tabId) => {
+  if (!tabId) return;
+
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        if (window.__npsContextMenuUnblock) {
+          return true;
+        }
+        const handler = (event) => {
+          event.stopImmediatePropagation();
+        };
+        document.addEventListener('contextmenu', handler, true);
+        window.__npsContextMenuUnblock = handler;
+        return true;
+      }
+    });
+
+    if (result && result.result) {
+      statusCallback('✓ Context menu unlocked for this tab', 'success');
+    } else {
+      statusCallback('ℹ Context menu already accessible', 'info');
+    }
+  } catch (error) {
+    console.error('Error unlocking context menu:', error);
+    statusCallback('✗ Could not unlock context menu.', 'error');
+  } finally {
+    contextMenuBlocked = false;
+    updateContextMenuUI();
+  }
+};
+
+unlockContextBtn?.addEventListener('click', () => {
+  if (!currentTabId) return;
+  unblockContextMenu(currentTabId);
 });
 
 // ===== FORMAT SELECTOR =====
@@ -217,6 +300,10 @@ const nativeHostStatusEl = document.getElementById('nativeHostStatus');
 // ===== VIDEO DETECTION =====
 chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   const tab = tabs[0];
+  currentTabId = tab.id;
+  if (tab.id) {
+    detectContextMenuBlock(tab.id);
+  }
   pageTitle.textContent = tab.title;
   pageUrl.textContent = tab.url;
   

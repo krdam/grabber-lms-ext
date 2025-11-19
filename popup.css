@@ -39,6 +39,64 @@ h1 {
   color: #1a1a1a;
 }
 
+.context-control {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.context-control__info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.context-control__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+  font-weight: 600;
+}
+
+.context-control__status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.context-control__status.blocked {
+  color: #c62828;
+}
+
+.ghost-btn {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #d0d0d0;
+  background: white;
+  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghost-btn:not(:disabled):hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
 .info {
   background: #f8f9fa;
   border-radius: 8px;
